@@ -13,9 +13,6 @@ on:
       safe_mode:
         required: true
         type: string
-      yt_cookies_json_b64:
-        required: false
-        type: string
 permissions:
   contents: write
 jobs:
@@ -23,92 +20,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
       - name: Process File
         run: |
-          python3 -m pip install --user --upgrade yt-dlp
-          export PATH="$HOME/.local/bin:$PATH"
+          sudo apt-get update && sudo apt-get install -y zip file
           URL="${{ github.event.inputs.file_url }}"
           FOLDER="${{ github.event.inputs.folder_name }}"
           SAFE_MODE="${{ github.event.inputs.safe_mode }}"
-          COOKIES_JSON_B64="${{ github.event.inputs.yt_cookies_json_b64 }}"
-          COOKIES_B64="${{ secrets.YTDLP_COOKIES_B64 }}"
-          COOKIES_RAW="${{ secrets.YTDLP_COOKIES }}"
-          IS_YOUTUBE="false"
-          if echo "$URL" | grep -Eqi "(youtube\.com|youtu\.be)"; then IS_YOUTUBE="true"; fi
 
-          TEMP_FILE="temp_download"
-          RAW_NAME=""
-          NAME_NO_EXT=""
-          URL_EXT=""
-          YTDLP_COOKIE_ARGS=""
-
-          if [ -n "$COOKIES_B64" ]; then
-            printf "%s" "$COOKIES_B64" | base64 -d > yt-cookies.txt
-            YTDLP_COOKIE_ARGS="--cookies yt-cookies.txt"
-          elif [ -n "$COOKIES_JSON_B64" ]; then
-            printf "%s" "$COOKIES_JSON_B64" | base64 -d > yt-cookies.json
-            python3 - <<'PY'
-import json
-
-with open('yt-cookies.json', 'r', encoding='utf-8') as f:
-    cookies = json.load(f)
-
-with open('yt-cookies.txt', 'w', encoding='utf-8') as out:
-    out.write('# Netscape HTTP Cookie File\n')
-    for c in cookies:
-        domain = str(c.get('domain', '')).strip()
-        if not domain: continue
-        path = str(c.get('path', '/'))
-        secure = 'TRUE' if c.get('secure') else 'FALSE'
-        host_only = c.get('hostOnly')
-        include_subdomains = 'FALSE' if host_only else 'TRUE'
-        expires = c.get('expirationDate')
-        if expires is None:
-            expires = 0
-        else:
-            try:
-                expires = int(float(expires))
-            except Exception:
-                expires = 0
-        name = str(c.get('name', ''))
-        value = str(c.get('value', ''))
-        if not name: continue
-        out.write(f'{domain}\t{include_subdomains}\t{path}\t{secure}\t{expires}\t{name}\t{value}\n')
-PY
-            YTDLP_COOKIE_ARGS="--cookies yt-cookies.txt"
-          elif [ -n "$COOKIES_RAW" ]; then
-            printf "%s" "$COOKIES_RAW" > yt-cookies.txt
-            YTDLP_COOKIE_ARGS="--cookies yt-cookies.txt"
-          fi
-
-          if [ "$IS_YOUTUBE" = "true" ]; then
-            yt-dlp --no-playlist --no-progress --restrict-filenames --js-runtimes node --merge-output-format mp4 $YTDLP_COOKIE_ARGS -o "temp_download.%(ext)s" "$URL"
-            TEMP_FILE=$(find . -maxdepth 1 -type f -name 'temp_download.*' | head -n 1 || true)
-            if [ -z "$TEMP_FILE" ] || [ ! -f "$TEMP_FILE" ]; then
-              echo "yt-dlp did not produce an output file."
-              exit 1
-            fi
-            RAW_NAME=$(yt-dlp --no-playlist --no-download --js-runtimes node $YTDLP_COOKIE_ARGS --print "%(title)s.%(ext)s" "$URL" | head -n 1 | tr "/" "_" | tr -d "\r")
-            if [ -z "$RAW_NAME" ]; then
-              RAW_NAME="$(basename "$TEMP_FILE")"
-            fi
-          else
-            RAW_NAME=$(basename "${URL%%\?*}" | sed 's/%20/ /g')
-            curl -L --fail --retry 5 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --progress-bar -D headers.txt -o "$TEMP_FILE" "$URL"
-          fi
-
+          RAW_NAME=$(basename "${URL%%\?*}" | sed 's/%20/ /g')
           NAME_NO_EXT="${RAW_NAME%.*}"
           URL_EXT="${RAW_NAME##*.}"
           if [ "$URL_EXT" = "$RAW_NAME" ]; then URL_EXT=""; fi
 
-          CONTENT_TYPE=""
-          if [ -f headers.txt ]; then
-            CONTENT_TYPE=$(grep -i "^content-type:" headers.txt | tail -n 1 | cut -d":" -f2- | tr -d "\r" | xargs)
-          fi
-          MIME_TYPE=$(file --mime-type -b "$TEMP_FILE")
+          curl -L --fail --retry 5 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --progress-bar -D headers.txt -o "temp_download" "$URL"
+
+          CONTENT_TYPE=$(grep -i "^content-type:" headers.txt | tail -n 1 | cut -d":" -f2- | tr -d "\r" | xargs)
+          MIME_TYPE=$(file --mime-type -b temp_download)
           SELECTED_EXT="$URL_EXT"
 
           if [ -z "$SELECTED_EXT" ] || [ ${#SELECTED_EXT} -gt 5 ]; then
@@ -144,7 +71,7 @@ PY
           fi
 
           mkdir -p wrap_dir
-          mv "$TEMP_FILE" "wrap_dir/$FINAL_FILE"
+          mv "temp_download" "wrap_dir/$FINAL_FILE"
           cd wrap_dir
           zip -0 "../$FOLDER.zip" "$FINAL_FILE"
           cd ..
