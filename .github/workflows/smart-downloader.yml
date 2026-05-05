@@ -27,6 +27,8 @@ jobs:
           URL="${{ github.event.inputs.file_url }}"
           FOLDER="${{ github.event.inputs.folder_name }}"
           SAFE_MODE="${{ github.event.inputs.safe_mode }}"
+          COOKIES_B64="${{ secrets.YTDLP_COOKIES_B64 }}"
+          COOKIES_RAW="${{ secrets.YTDLP_COOKIES }}"
           IS_YOUTUBE="false"
           if echo "$URL" | grep -Eqi "(youtube\.com|youtu\.be)"; then IS_YOUTUBE="true"; fi
 
@@ -34,15 +36,24 @@ jobs:
           RAW_NAME=""
           NAME_NO_EXT=""
           URL_EXT=""
+          YTDLP_COOKIE_ARGS=""
+
+          if [ -n "$COOKIES_B64" ]; then
+            printf "%s" "$COOKIES_B64" | base64 -d > yt-cookies.txt
+            YTDLP_COOKIE_ARGS="--cookies yt-cookies.txt"
+          elif [ -n "$COOKIES_RAW" ]; then
+            printf "%s" "$COOKIES_RAW" > yt-cookies.txt
+            YTDLP_COOKIE_ARGS="--cookies yt-cookies.txt"
+          fi
 
           if [ "$IS_YOUTUBE" = "true" ]; then
-            yt-dlp --no-playlist --no-progress --restrict-filenames --merge-output-format mp4 -o "temp_download.%(ext)s" "$URL"
+            yt-dlp --no-playlist --no-progress --restrict-filenames --js-runtimes node --merge-output-format mp4 $YTDLP_COOKIE_ARGS -o "temp_download.%(ext)s" "$URL"
             TEMP_FILE=$(find . -maxdepth 1 -type f -name 'temp_download.*' | head -n 1 || true)
             if [ -z "$TEMP_FILE" ] || [ ! -f "$TEMP_FILE" ]; then
               echo "yt-dlp did not produce an output file."
               exit 1
             fi
-            RAW_NAME=$(yt-dlp --no-playlist --no-download --print "%(title)s.%(ext)s" "$URL" | head -n 1 | tr "/" "_" | tr -d "\r")
+            RAW_NAME=$(yt-dlp --no-playlist --no-download --js-runtimes node $YTDLP_COOKIE_ARGS --print "%(title)s.%(ext)s" "$URL" | head -n 1 | tr "/" "_" | tr -d "\r")
             if [ -z "$RAW_NAME" ]; then
               RAW_NAME="$(basename "$TEMP_FILE")"
             fi
