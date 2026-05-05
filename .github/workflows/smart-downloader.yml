@@ -20,10 +20,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
       - name: Process File
         run: |
-          sudo apt-get update && sudo apt-get install -y zip file ffmpeg python3-pip
-          python3 -m pip install --upgrade --break-system-packages yt-dlp
+          python3 -m pip install --user --upgrade yt-dlp
+          export PATH="$HOME/.local/bin:$PATH"
           URL="${{ github.event.inputs.file_url }}"
           FOLDER="${{ github.event.inputs.folder_name }}"
           SAFE_MODE="${{ github.event.inputs.safe_mode }}"
