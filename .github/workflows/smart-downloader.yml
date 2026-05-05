@@ -22,7 +22,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Process File
         run: |
-          sudo apt-get update && sudo apt-get install -y zip file yt-dlp ffmpeg
+          sudo apt-get update && sudo apt-get install -y zip file ffmpeg python3-pip
+          python3 -m pip install --upgrade --break-system-packages yt-dlp
           URL="${{ github.event.inputs.file_url }}"
           FOLDER="${{ github.event.inputs.folder_name }}"
           SAFE_MODE="${{ github.event.inputs.safe_mode }}"
@@ -35,13 +36,16 @@ jobs:
           URL_EXT=""
 
           if [ "$IS_YOUTUBE" = "true" ]; then
-            yt-dlp --no-playlist --merge-output-format mp4 -o "temp_download.%(ext)s" "$URL"
-            TEMP_FILE=$(ls -1 temp_download.* | head -n 1 || true)
+            yt-dlp --no-playlist --no-progress --restrict-filenames --merge-output-format mp4 -o "temp_download.%(ext)s" "$URL"
+            TEMP_FILE=$(find . -maxdepth 1 -type f -name 'temp_download.*' | head -n 1 || true)
             if [ -z "$TEMP_FILE" ] || [ ! -f "$TEMP_FILE" ]; then
               echo "yt-dlp did not produce an output file."
               exit 1
             fi
-            RAW_NAME=$(yt-dlp --no-playlist --print "%(title)s.%(ext)s" "$URL" | head -n 1 | tr "/" "_")
+            RAW_NAME=$(yt-dlp --no-playlist --no-download --print "%(title)s.%(ext)s" "$URL" | head -n 1 | tr "/" "_" | tr -d "\r")
+            if [ -z "$RAW_NAME" ]; then
+              RAW_NAME="$(basename "$TEMP_FILE")"
+            fi
           else
             RAW_NAME=$(basename "${URL%%\?*}" | sed 's/%20/ /g')
             curl -L --fail --retry 5 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" --progress-bar -D headers.txt -o "$TEMP_FILE" "$URL"
