@@ -30,6 +30,9 @@ jobs:
 
       - name: Setup yt-dlp
         uses: AnimMouse/setup-yt-dlp@v3
+
+      - name: Setup yt-dlp cookies
+        uses: AnimMouse/setup-yt-dlp/cookies@v3
         with:
           cookies: ${{ secrets.YOUTUBE_COOKIES }}
 
