@@ -471,10 +471,7 @@ jobs:
             echo "Using yt-dlp for supported URL"
 
             yt-dlp \
-              -f "bestvideo*+bestaudio/best" \
               --no-check-certificates \
-              --merge-output-format mkv \
-              --no-keep-video \
               --no-playlist \
               --cookies "cookies.txt" \
               -o "temp_download.%(ext)s" \
